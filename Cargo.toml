@@ -2,6 +2,7 @@
 name = "berk"
 version = "0.1.0"
 authors = ["Jonathan Stites <mail@jonstites.com>"]
+description = "Hopefully this will be a git implementation"
 edition = "2018"
 readme = "README.md"
 documentation = "https://github.com/jonstites/berk"
