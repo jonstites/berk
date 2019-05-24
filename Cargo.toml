@@ -14,3 +14,5 @@ license = "MIT OR Apache-2.0"
 travis-ci = { repository = "jonstites/berk", branch = "master" }
 
 [dependencies]
+clap = "2.33"
+sha-1 = "0.8.1"
