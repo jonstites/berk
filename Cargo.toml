@@ -16,4 +16,4 @@ travis-ci = { repository = "jonstites/berk", branch = "master" }
 [dependencies]
 clap = "2.33"
 sha-1 = "0.8.1"
-flate2 = "1.0.7"
+libflate = "0.1.22"

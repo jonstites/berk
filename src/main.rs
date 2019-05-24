@@ -5,11 +5,8 @@ extern crate clap;
 use clap::{App, Arg, SubCommand};
 use std::path::Path;
 
-use flate2::Compression;
-use flate2::write::ZlibEncoder;
-use std::fs::{File, create_dir_all};
-
-use std::io::prelude::*;
+use libflate::zlib::Encoder;
+use std::fs::{create_dir_all, File};
 
 fn main() -> berk::Result<()> {
     let matches = App::new("berk")
@@ -28,23 +25,26 @@ fn main() -> berk::Result<()> {
 
     if let Some(matches) = matches.subcommand_matches("hash-object") {
         if let Some(filename) = matches.value_of("file") {
-
             let object = berk::object_from_file(&filename)?;
             let hash = berk::hash_object(&object);
 
             if matches.is_present("write") {
                 let path = Path::new(".");
                 let git_src = berk::find_git_src(&path)?;
-                let object_dest = git_src.join(".git/objects").join(hash[..2].to_string()).join(hash[2..].to_string());
+                let object_dest = git_src
+                    .join(".git/objects")
+                    .join(hash[..2].to_string())
+                    .join(hash[2..].to_string());
 
                 if let Some(parent) = object_dest.parent() {
                     create_dir_all(parent)?;
                 }
-                let file = File::create(object_dest)?;
 
-                let mut e = ZlibEncoder::new(file, Compression::default());
-                e.write_all(&object.with_header())?;
-                e.flush_finish()?;
+                let file = File::create(object_dest)?;
+                let mut e = Encoder::new(file)?;
+
+                std::io::copy(&mut &object.with_header()[..], &mut e)?;
+                e.finish().into_result()?;
             }
             println!("{}", hash)
         }
