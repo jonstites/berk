@@ -8,13 +8,20 @@ fn main() -> std::io::Result<()> {
     let matches = App::new("berk")
         .version(crate_version!())
         .about("A git implementation for no good reason")
-        .subcommand(SubCommand::with_name("hash-object").arg(Arg::with_name("file").index(1)))
+        .subcommand(SubCommand::with_name("hash-object")
+            .arg(Arg::with_name("file").index(1))
+            .arg(Arg::with_name("write").short("w").help("Actually write the object into the object database.")))
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("hash-object") {
         if let Some(filename) = matches.value_of("file") {
             let object = berk::object_from_file(&filename)?;
-            println!("{}", berk::hash_object(&berk::ObjectType::Blob, &object));
+            let hash = berk::hash_object(&object);
+            
+            if matches.is_present("write") {
+                
+            }
+            println!("{}", hash)
         }
     }
     Ok(())
