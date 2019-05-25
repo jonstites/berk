@@ -7,8 +7,6 @@ use std::result;
 
 pub type Result<T> = result::Result<T, BerkError>;
 
-
-
 #[derive(Debug)]
 pub enum BerkError {
     NotAGitRepo,

@@ -7,8 +7,6 @@ use std::path::Path;
 
 use libflate::zlib::Encoder;
 use std::fs::{create_dir_all, File};
-use std::fmt::Write;
-
 
 fn main() -> berk::Result<()> {
     let matches = App::new("berk")
