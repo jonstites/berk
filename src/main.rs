@@ -7,6 +7,8 @@ use std::path::Path;
 
 use libflate::zlib::Encoder;
 use std::fs::{create_dir_all, File};
+use std::fmt::Write;
+
 
 fn main() -> berk::Result<()> {
     let matches = App::new("berk")
@@ -27,14 +29,15 @@ fn main() -> berk::Result<()> {
         if let Some(filename) = matches.value_of("file") {
             let object = berk::object_from_file(&filename)?;
             let hash = berk::hash_object(&object);
+            let hex_hash: String = hash.iter().map(|&byte| format!("{:02x}", byte)).collect();
 
             if matches.is_present("write") {
                 let path = Path::new(".");
                 let git_src = berk::find_git_src(&path)?;
                 let object_dest = git_src
                     .join(".git/objects")
-                    .join(hash[..2].to_string())
-                    .join(hash[2..].to_string());
+                    .join(hex_hash[..2].to_string())
+                    .join(hex_hash[2..].to_string());
 
                 if let Some(parent) = object_dest.parent() {
                     create_dir_all(parent)?;
@@ -46,7 +49,7 @@ fn main() -> berk::Result<()> {
                 std::io::copy(&mut &object.with_header()[..], &mut e)?;
                 e.finish().into_result()?;
             }
-            println!("{}", hash)
+            println!("{}", hex_hash)
         }
     }
     Ok(())

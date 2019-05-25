@@ -7,6 +7,8 @@ use std::result;
 
 pub type Result<T> = result::Result<T, BerkError>;
 
+
+
 #[derive(Debug)]
 pub enum BerkError {
     NotAGitRepo,
@@ -65,10 +67,8 @@ pub fn object_from_file(filename: &str) -> std::io::Result<Object> {
     })
 }
 
-pub fn hash_object(object: &Object) -> String {
-    let hash = Sha1::new().chain(object.with_header()).result();
-
-    format!("{:x}", hash)
+pub fn hash_object(object: &Object) -> Vec<u8> {
+    Sha1::new().chain(object.with_header()).result().to_vec()
 }
 
 pub fn is_git_src(path: &Path) -> bool {
@@ -102,7 +102,12 @@ mod tests {
             object_type,
         };
         let hash = hash_object(&object);
-        assert_eq!(hash, "bd9dbf5aae1a3862dd1526723246b20206e5fc37");
+        /*let mut hex_hash = String::new();
+            for byte in hash {
+                write!(&mut hex_hash, "{:01$x}", hash, hash.len()*2).unwrap();
+        }*/
+        let hex_hash: String = hash.iter().map(|&byte| format!("{:02x}", byte)).collect();
+        assert_eq!(hex_hash, "bd9dbf5aae1a3862dd1526723246b20206e5fc37");
     }
 
 }
