@@ -21,6 +21,13 @@ fn main() -> berk::Result<()> {
                         .help("Actually write the object into the object database."),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("init")
+                .arg(Arg::with_name("directory")
+                .index(1)
+                .default_value(".")
+                .help("If you provide a directory, the command is run inside it. If this directory does not exist, it will be created."))
+        )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("hash-object") {
@@ -33,7 +40,7 @@ fn main() -> berk::Result<()> {
                 let path = Path::new(".");
                 let git_src = berk::find_git_src(&path)?;
                 let object_dest = git_src
-                    .join(".git/objects")
+                    .join(".berk/objects")
                     .join(hex_hash[..2].to_string())
                     .join(hex_hash[2..].to_string());
 
@@ -50,5 +57,13 @@ fn main() -> berk::Result<()> {
             println!("{}", hex_hash)
         }
     }
+        if let Some(matches) = matches.subcommand_matches("init") {
+            if let Some(directory) = matches.value_of("directory") {
+                let path = Path::new(directory);
+                berk::initialize_repo(path)?;
+            }
+        }
+
+    
     Ok(())
 }
