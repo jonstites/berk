@@ -6,15 +6,17 @@ use clap::{App, Arg, SubCommand};
 use std::path::Path;
 
 use libflate::zlib::Encoder;
+use std::env;
 use std::fs::{create_dir_all, File};
 
 fn main() -> berk::Result<()> {
     let matches = App::new("berk")
         .version(crate_version!())
         .about("A git implementation for no good reason")
+
         .subcommand(
             SubCommand::with_name("hash-object")
-                .arg(Arg::with_name("file").index(1))
+                .arg(Arg::with_name("file").index(1).required(true))
                 .arg(
                     Arg::with_name("write")
                         .short("w")
@@ -25,45 +27,37 @@ fn main() -> berk::Result<()> {
             SubCommand::with_name("init")
                 .arg(Arg::with_name("directory")
                 .index(1)
-                .default_value(".")
                 .help("If you provide a directory, the command is run inside it. If this directory does not exist, it will be created."))
+        )
+        .subcommand(
+            SubCommand::with_name("commit")                    
         )
         .get_matches();
 
-    if let Some(matches) = matches.subcommand_matches("hash-object") {
-        if let Some(filename) = matches.value_of("file") {
-            let object = berk::object_from_file(&filename)?;
-            let hash = berk::hash_object(&object);
-            let hex_hash: String = hash.iter().map(|&byte| format!("{:02x}", byte)).collect();
+    if let Some(matches) = matches.subcommand_matches("init") {
+        if let Some(directory) = matches.value_of("directory") {
+            let path = Path::new(directory).canonicalize()?;
+            let git_path = path.join(".git");
 
-            if matches.is_present("write") {
-                let path = Path::new(".");
-                let git_src = berk::find_git_src(&path)?;
-                let object_dest = git_src
-                    .join(".berk/objects")
-                    .join(hex_hash[..2].to_string())
-                    .join(hex_hash[2..].to_string());
-
-                if let Some(parent) = object_dest.parent() {
-                    create_dir_all(parent)?;
-                }
-
-                let file = File::create(object_dest)?;
-                let mut e = Encoder::new(file)?;
-
-                std::io::copy(&mut &object.with_header()[..], &mut e)?;
-                e.finish().into_result()?;
+            let dirs = vec!["objects", "refs"];
+            for dir in dirs {
+                create_dir_all(git_path.join(dir))?
             }
-            println!("{}", hex_hash)
         }
     }
-        if let Some(matches) = matches.subcommand_matches("init") {
-            if let Some(directory) = matches.value_of("directory") {
-                let path = Path::new(directory);
-                berk::initialize_repo(path)?;
-            }
-        }
 
-    
+    if let Some(matches) = matches.subcommand_matches("commit") {
+        let cwd = env::current_dir()?;
+        let git_dir = cwd.join(".git");
+        let db_dir = git_dir.join("objects");
+
+        let file_entries = cwd.read_dir()?;
+
+        for file_entry in file_entries {
+            let file = file_entry?;
+            println!("{:?}", file);
+        }
+    }
+
     Ok(())
 }
