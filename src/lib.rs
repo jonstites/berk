@@ -16,15 +16,9 @@ impl From<std::io::Error> for BerkError {
     }
 }
 
-pub trait Object {
-    fn get_type(&self) -> &str;
-    fn get_data(&self) -> &[u8];
-    fn get_oid(&self) -> &[u8];
-}
-
 pub struct Blob {
     oid: [u8; 20],
-    raw_data: Vec<u8>,
+    _raw_data: Vec<u8>,
     data: Vec<u8>,
 }
 
@@ -36,13 +30,13 @@ impl Blob {
             &raw_data,
         ]
         .concat();
-        println!("{:?}", data);
+
         let hash = Sha1::digest(&data);
         let mut oid = [0_u8; 20];
         oid.copy_from_slice(hash.as_slice());
         Blob {
             oid,
-            raw_data,
+            _raw_data: raw_data,
             data,
         }
     }
@@ -62,6 +56,12 @@ impl Object for Blob {
     }
 }
 
+pub trait Object {
+    fn get_data(&self) -> &[u8];
+    fn get_type(&self) -> &str;
+    fn get_oid(&self) -> &[u8];
+}
+
 pub struct ObjectDatabase {
     pub path: PathBuf,
 }
@@ -71,7 +71,16 @@ impl ObjectDatabase {
         ObjectDatabase { path }
     }
 
-    pub fn store(_object: impl Object) -> Result<()> {
+    pub fn write_object(&self, object: impl Object) -> Result<()> {
+        let hex_hash: String = object
+            .get_oid()
+            .iter()
+            .map(|&byte| format!("{:02x}", byte))
+            .collect();
+        let object_path = self
+            .path
+            .join(hex_hash[..2].to_string())
+            .join(hex_hash[2..].to_string());
         Ok(())
     }
 }
@@ -84,8 +93,12 @@ mod tests {
     #[test]
     fn test_blob() {
         let contents = "what is up, doc?".as_bytes().to_vec();
-        let blob = Blob::new(contents);        
-        let hex_hash: String = blob.get_oid().iter().map(|&byte| format!("{:02x}", byte)).collect();
+        let blob = Blob::new(contents);
+        let hex_hash: String = blob
+            .get_oid()
+            .iter()
+            .map(|&byte| format!("{:02x}", byte))
+            .collect();
         assert_eq!(hex_hash, "bd9dbf5aae1a3862dd1526723246b20206e5fc37");
     }
 

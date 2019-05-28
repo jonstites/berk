@@ -5,9 +5,9 @@ extern crate clap;
 use clap::{App, Arg, SubCommand};
 use std::path::Path;
 
-use libflate::zlib::Encoder;
+//use libflate::zlib::Encoder;
 use std::env;
-use std::fs::{create_dir_all, File};
+use std::fs::create_dir_all;
 
 fn main() -> berk::Result<()> {
     let matches = App::new("berk")
@@ -46,10 +46,10 @@ fn main() -> berk::Result<()> {
         }
     }
 
-    if let Some(matches) = matches.subcommand_matches("commit") {
+    if let Some(_matches) = matches.subcommand_matches("commit") {
         let cwd = env::current_dir()?;
         let git_dir = cwd.join(".git");
-        let db_dir = git_dir.join("objects");
+        let _db_dir = git_dir.join("objects");
 
         let file_entries = cwd.read_dir()?;
 
