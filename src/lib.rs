@@ -1,8 +1,13 @@
+use libflate::zlib::Encoder;
 use sha1::{Digest, Sha1};
+use std::fs::{create_dir_all, rename, File};
 use std::path::PathBuf;
 use std::result;
-
 pub type Result<T> = result::Result<T, BerkError>;
+
+use rand;
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 
 #[derive(Debug)]
 pub enum BerkError {
@@ -71,16 +76,33 @@ impl ObjectDatabase {
         ObjectDatabase { path }
     }
 
-    pub fn write_object(&self, object: impl Object) -> Result<()> {
+    pub fn write_object(&self, object: &impl Object) -> Result<()> {
         let hex_hash: String = object
             .get_oid()
             .iter()
             .map(|&byte| format!("{:02x}", byte))
             .collect();
-        let object_path = self
-            .path
-            .join(hex_hash[..2].to_string())
-            .join(hex_hash[2..].to_string());
+
+        let parent = self.path.join(hex_hash[..2].to_string());
+
+        create_dir_all(&parent)?;
+
+        let randomness: String = thread_rng().sample_iter(&Alphanumeric).take(6).collect();
+
+        let mut filename = "tmp_obj_".to_string();
+        filename.push_str(&randomness);
+
+        let tempfilename = parent.join(filename);
+
+        let tempfile = File::create(&tempfilename)?;
+        let mut e = Encoder::new(tempfile)?;
+        std::io::copy(&mut object.get_data(), &mut e)?;
+        e.finish().into_result()?;
+
+        let object_filename = parent.join(hex_hash[2..].to_string());
+
+        rename(tempfilename, object_filename)?;
+
         Ok(())
     }
 }
