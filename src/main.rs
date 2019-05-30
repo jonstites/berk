@@ -5,9 +5,9 @@ extern crate clap;
 use clap::{App, Arg, SubCommand};
 use std::path::Path;
 
-//use libflate::zlib::Encoder;
 use std::env;
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all};
+
 
 fn main() -> berk::Result<()> {
     let matches = App::new("berk")
@@ -49,14 +49,26 @@ fn main() -> berk::Result<()> {
     if let Some(_matches) = matches.subcommand_matches("commit") {
         let cwd = env::current_dir()?;
         let git_dir = cwd.join(".git");
-        let _db_dir = git_dir.join("objects");
+        let db_dir = git_dir.join("objects");
+
+        let db = berk::ObjectDatabase::new(db_dir);
 
         let file_entries = cwd.read_dir()?;
 
         for file_entry in file_entries {
-            let file = file_entry?;
-            println!("{:?}", file);
+            let file_entry = file_entry?;
+            let metadata = file_entry.metadata()?;
+            if metadata.is_file() {
+                let contents = std::fs::read(file_entry.path())?;
+                let blob = berk::Blob::new(contents);
+                db.write_object(&blob)?;
+                println!("{:?}", file_entry);
+            }
         }
+
+
+
+
     }
 
     Ok(())
