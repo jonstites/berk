@@ -13,11 +13,60 @@ use rand::{thread_rng, Rng};
 pub enum BerkError {
     NotAGitRepo,
     IOError(std::io::Error),
+    OsStringError(std::ffi::OsString),
 }
 
 impl From<std::io::Error> for BerkError {
     fn from(err: std::io::Error) -> BerkError {
         BerkError::IOError(err)
+    }
+}
+
+impl From<std::ffi::OsString> for BerkError {
+    fn from(err: std::ffi::OsString) -> BerkError {
+        BerkError::OsStringError(err)
+    }
+}
+#[derive(Debug)]
+pub struct Tree {
+    oid: [u8; 20],
+    entries: Vec<(String, [u8; 20])>,
+    data: Vec<u8>,
+}
+
+impl Tree {
+    pub fn new(mut entries: Vec<(String, [u8; 20])>) -> Tree {
+        entries.sort_by_key(|(path, _oid)| path.clone());
+        let raw_data: Vec<u8> = entries.iter().map(|(path, oid)| [
+            b"100644 ",
+            path.as_bytes(),
+            b"\0",
+            oid
+        ].concat()
+        ).flatten().collect();
+        let data: Vec<u8> = [
+            b"tree ",
+            format!("{}\0", raw_data.len()).as_bytes(),
+            &raw_data].concat();
+        
+        let hash = Sha1::digest(&data);
+        let mut oid = [0_u8; 20];
+        oid.copy_from_slice(hash.as_slice());
+
+        Tree {oid, entries, data}
+    }
+}
+impl Object for Tree {
+    fn get_type(&self) -> &str {
+        "tree"
+    }
+
+    fn get_data(&self) -> &[u8] {
+        &self.data
+    }
+
+    fn get_oid(&self) -> [u8; 20] {
+        self.oid
     }
 }
 
@@ -56,15 +105,15 @@ impl Object for Blob {
         &self.data
     }
 
-    fn get_oid(&self) -> &[u8] {
-        &self.oid
+    fn get_oid(&self) -> [u8; 20] {
+        self.oid
     }
 }
 
 pub trait Object {
     fn get_data(&self) -> &[u8];
     fn get_type(&self) -> &str;
-    fn get_oid(&self) -> &[u8];
+    fn get_oid(&self) -> [u8; 20];
 }
 
 pub struct ObjectDatabase {

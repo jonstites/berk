@@ -7,7 +7,7 @@ use std::path::Path;
 
 use std::env;
 use std::fs::{create_dir_all};
-
+use crate::berk::Object;
 
 fn main() -> berk::Result<()> {
     let matches = App::new("berk")
@@ -55,20 +55,21 @@ fn main() -> berk::Result<()> {
 
         let file_entries = cwd.read_dir()?;
 
+        let mut entries = Vec::new();
         for file_entry in file_entries {
             let file_entry = file_entry?;
             let metadata = file_entry.metadata()?;
             if metadata.is_file() {
-                let contents = std::fs::read(file_entry.path())?;
+                let path = file_entry.path();
+                let contents = std::fs::read(&path)?;
                 let blob = berk::Blob::new(contents);
                 db.write_object(&blob)?;
-                println!("{:?}", file_entry);
+                entries.push((file_entry.file_name().into_string()?, blob.get_oid()));
             }
         }
 
-
-
-
+        let tree = berk::Tree::new(entries);
+        db.write_object(&tree)?;
     }
 
     Ok(())
