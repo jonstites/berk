@@ -27,6 +27,78 @@ impl From<std::ffi::OsString> for BerkError {
         BerkError::OsStringError(err)
     }
 }
+
+#[derive(Debug)]
+pub struct Commit {
+    oid: [u8; 20],
+    tree_oid: [u8; 20],
+    author_name: String,
+    author_email: String,
+    timestamp: String,
+    message: String,
+    data: Vec<u8>,
+}
+
+impl Commit {
+    pub fn new(
+        tree_oid: [u8; 20],
+        author_name: String,
+        author_email: String,
+        timestamp: String,
+        message: String,
+    ) -> Commit {
+        let hex_tree_oid: String = tree_oid
+            .iter()
+            .map(|&byte| format!("{:02x}", byte))
+            .collect();
+
+        let raw_data: Vec<u8> = [
+            b"tree ",
+            hex_tree_oid.as_bytes(),
+            format!(
+                "\nauthor {} {} {}\ncommiter {} {} {}\n\n{}",
+                author_name, author_email, timestamp, author_name, author_email, timestamp, message
+            )
+            .as_bytes(),
+        ]
+        .concat();
+
+        let data: Vec<u8> = [
+            b"commit ",
+            format!("{}\0", raw_data.len()).as_bytes(),
+            &raw_data,
+        ]
+        .concat();
+
+        let hash = Sha1::digest(&data);
+        let mut oid = [0_u8; 20];
+        oid.copy_from_slice(hash.as_slice());
+        Commit {
+            oid,
+            tree_oid,
+            author_name,
+            author_email,
+            timestamp,
+            message,
+            data,
+        }
+    }
+}
+
+impl Object for Commit {
+    fn get_type(&self) -> &str {
+        "commit"
+    }
+
+    fn get_data(&self) -> &[u8] {
+        &self.data
+    }
+
+    fn get_oid(&self) -> [u8; 20] {
+        self.oid
+    }
+}
+
 #[derive(Debug)]
 pub struct Tree {
     oid: [u8; 20],
@@ -37,23 +109,23 @@ pub struct Tree {
 impl Tree {
     pub fn new(mut entries: Vec<(String, [u8; 20])>) -> Tree {
         entries.sort_by_key(|(path, _oid)| path.clone());
-        let raw_data: Vec<u8> = entries.iter().map(|(path, oid)| [
-            b"100644 ",
-            path.as_bytes(),
-            b"\0",
-            oid
-        ].concat()
-        ).flatten().collect();
+        let raw_data: Vec<u8> = entries
+            .iter()
+            .map(|(path, oid)| [b"100644 ", path.as_bytes(), b"\0", oid].concat())
+            .flatten()
+            .collect();
         let data: Vec<u8> = [
             b"tree ",
             format!("{}\0", raw_data.len()).as_bytes(),
-            &raw_data].concat();
-        
+            &raw_data,
+        ]
+        .concat();
+
         let hash = Sha1::digest(&data);
         let mut oid = [0_u8; 20];
         oid.copy_from_slice(hash.as_slice());
 
-        Tree {oid, entries, data}
+        Tree { oid, entries, data }
     }
 }
 impl Object for Tree {

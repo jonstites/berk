@@ -5,9 +5,13 @@ extern crate clap;
 use clap::{App, Arg, SubCommand};
 use std::path::Path;
 
-use std::env;
-use std::fs::{create_dir_all};
 use crate::berk::Object;
+use std::env;
+use std::fs::create_dir_all;
+
+extern crate chrono;
+
+use chrono::Local;
 
 fn main() -> berk::Result<()> {
     let matches = App::new("berk")
@@ -30,7 +34,12 @@ fn main() -> berk::Result<()> {
                 .help("If you provide a directory, the command is run inside it. If this directory does not exist, it will be created."))
         )
         .subcommand(
-            SubCommand::with_name("commit")                    
+            SubCommand::with_name("commit")
+                .arg(Arg::with_name("message")
+                .short("m")
+                .long("message")
+                .takes_value(true)
+                .required(true))
         )
         .get_matches();
 
@@ -46,7 +55,7 @@ fn main() -> berk::Result<()> {
         }
     }
 
-    if let Some(_matches) = matches.subcommand_matches("commit") {
+    if let Some(matches) = matches.subcommand_matches("commit") {
         let cwd = env::current_dir()?;
         let git_dir = cwd.join(".git");
         let db_dir = git_dir.join("objects");
@@ -70,6 +79,24 @@ fn main() -> berk::Result<()> {
 
         let tree = berk::Tree::new(entries);
         db.write_object(&tree)?;
+
+        let author_name = env::var_os("GIT_AUTHOR_NAME")
+            .map(|name| name.into_string().unwrap())
+            .unwrap_or_else(|| "nobody".to_string());
+        let author_email = env::var_os("GIT_AUTHOR_EMAIL")
+            .map(|email| email.into_string().unwrap())
+            .unwrap_or_else(|| "nobody@example.com".to_string());
+        let timestamp = Local::now().format("%s %z").to_string();
+        let message = matches.value_of("message").unwrap().to_string();
+
+        let commit = berk::Commit::new(
+            tree.get_oid(),
+            author_name,
+            author_email,
+            timestamp,
+            message,
+        );
+        db.write_object(&commit)?;
     }
 
     Ok(())
