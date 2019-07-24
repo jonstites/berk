@@ -1,111 +1,78 @@
-use sha1::{Digest, Sha1};
-use std::fmt;
+use rusqlite::types::ToSql;
+use rusqlite::{Connection, Result, NO_PARAMS};
+use crypto::sha1::Sha1;
+use crypto::digest::Digest;
 use std::fs::File;
 use std::io::prelude::*;
-use std::path::Path;
-use std::result;
-
-pub type Result<T> = result::Result<T, BerkError>;
 
 #[derive(Debug)]
-pub enum BerkError {
-    NotAGitRepo,
-    IOError(std::io::Error),
+pub struct GitBlob {
+    oid: String,
+    data: Vec<u8>,
 }
 
-impl From<std::io::Error> for BerkError {
-    fn from(err: std::io::Error) -> BerkError {
-        BerkError::IOError(err)
-    }
-}
+impl GitBlob {
 
-pub enum ObjectType {
-    Commit,
-    Tree,
-    Blob,
-    Tag,
-}
+    pub fn new(data: Vec<u8>) -> GitBlob {
 
-pub struct Object {
-    object_type: ObjectType,
-    contents: Vec<u8>,
-}
+        let mut hasher = Sha1::new();
 
-impl Object {
-    pub fn with_header(&self) -> Vec<u8> {
-        let mut v = Vec::new();
-        v.extend_from_slice(
-            format!("{} {}\0", self.object_type, self.contents.len().to_string()).as_bytes(),
-        );
-        v.extend_from_slice(&self.contents);
-        v
-    }
-}
+        let data_len = data.len().to_string();
+        let header = format!("blob {}\0", data_len);
+        hasher.input(header.as_bytes());
+        hasher.input(&data);
 
-impl fmt::Display for ObjectType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ObjectType::Commit => write!(f, "commit"),
-            ObjectType::Tree => write!(f, "tree"),
-            ObjectType::Blob => write!(f, "blob"),
-            ObjectType::Tag => write!(f, "tag"),
+        let oid = hasher.result_str();
+        
+        GitBlob {
+            oid,
+            data
         }
     }
-}
 
-pub fn object_from_file(filename: &str) -> std::io::Result<Object> {
-    let mut file = File::open(filename)?;
-    let mut contents = Vec::new();
-    file.read_to_end(&mut contents)?;
-
-    let object_type = ObjectType::Blob;
-    Ok(Object {
-        object_type,
-        contents,
-    })
-}
-
-pub fn hash_object(object: &Object) -> Vec<u8> {
-    Sha1::new().chain(object.with_header()).result().to_vec()
-}
-
-pub fn is_git_src(path: &Path) -> bool {
-    // TODO: there is supposed to be a check that HEAD is valid
-    path.join(".git/HEAD").is_file()
-        && path.join(".git/objects").is_dir()
-        && path.join(".git/refs").is_dir()
-}
-
-pub fn find_git_src(path: &Path) -> Result<&Path> {
-    let ancestors = path.ancestors();
-    for ancestor in ancestors {
-        if is_git_src(ancestor) {
-            return Ok(ancestor);
-        }
+    pub fn from_file(path: &str) -> std::io::Result<GitBlob> {
+        let mut file = File::open(path)?;
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents)?;
+        Ok(GitBlob::new(contents))        
     }
-    Err(BerkError::NotAGitRepo)
 }
 
-#[cfg(test)]
-mod tests {
+pub struct Database {
+    connection: Connection,
+}
 
-    use super::*;
+impl Database {
 
-    #[test]
-    fn test_hash_object() {
-        let contents = "what is up, doc?".as_bytes().to_vec();
-        let object_type = ObjectType::Blob;
-        let object = Object {
-            contents,
-            object_type,
-        };
-        let hash = hash_object(&object);
-        /*let mut hex_hash = String::new();
-            for byte in hash {
-                write!(&mut hex_hash, "{:01$x}", hash, hash.len()*2).unwrap();
-        }*/
-        let hex_hash: String = hash.iter().map(|&byte| format!("{:02x}", byte)).collect();
-        assert_eq!(hex_hash, "bd9dbf5aae1a3862dd1526723246b20206e5fc37");
+    pub fn new(path: &str) -> Result<Database> {
+        let connection = Connection::open(path)?;
+        Ok(Database { connection })
     }
 
+    pub fn init(&self) -> Result<()> {
+        self.init_blob_db()?;
+        Ok(())
+    }
+
+    fn init_blob_db(&self) -> Result<()> {
+        self.connection.execute(
+            "CREATE TABLE IF NOT EXISTS git_blob (
+                  oid              TEXT PRIMARY KEY,
+                  data             BLOB
+                  )",
+            NO_PARAMS,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn commit_blob(&self, git_blob: GitBlob) -> Result<()> {
+        self.connection.execute(
+            "INSERT OR IGNORE INTO git_blob (oid, data)
+                  VALUES (?1, ?2)",
+            &[&git_blob.oid, &git_blob.data as &ToSql],
+        )?;
+
+        Ok(())
+    }
 }

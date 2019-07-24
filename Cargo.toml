@@ -15,5 +15,10 @@ travis-ci = { repository = "jonstites/berk", branch = "master" }
 
 [dependencies]
 clap = "2.33"
-sha-1 = "0.8.1"
-libflate = "0.1.22"
+#sha-1 = "0.8.1"
+time = "0.1.42"
+rust-crypto = "0.2.36"
+error-chain = "0.12.1"
+[dependencies.rusqlite]
+version = "0.19.0"
+features = ["bundled"]

@@ -1,54 +1,28 @@
-extern crate berk;
+use berk::{Database, GitBlob};
 
 #[macro_use]
-extern crate clap;
-use clap::{App, Arg, SubCommand};
-use std::path::Path;
+extern crate error_chain;
+mod errors {
+    // Create the Error, ErrorKind, ResultExt, and Result types
+    error_chain!{}
+}
 
-use libflate::zlib::Encoder;
-use std::fs::{create_dir_all, File};
+use errors::*;
 
-fn main() -> berk::Result<()> {
-    let matches = App::new("berk")
-        .version(crate_version!())
-        .about("A git implementation for no good reason")
-        .subcommand(
-            SubCommand::with_name("hash-object")
-                .arg(Arg::with_name("file").index(1))
-                .arg(
-                    Arg::with_name("write")
-                        .short("w")
-                        .help("Actually write the object into the object database."),
-                ),
-        )
-        .get_matches();
 
-    if let Some(matches) = matches.subcommand_matches("hash-object") {
-        if let Some(filename) = matches.value_of("file") {
-            let object = berk::object_from_file(&filename)?;
-            let hash = berk::hash_object(&object);
-            let hex_hash: String = hash.iter().map(|&byte| format!("{:02x}", byte)).collect();
+fn main() -> Result<()> {
 
-            if matches.is_present("write") {
-                let path = Path::new(".");
-                let git_src = berk::find_git_src(&path)?;
-                let object_dest = git_src
-                    .join(".git/objects")
-                    .join(hex_hash[..2].to_string())
-                    .join(hex_hash[2..].to_string());
+    let database = Database::new("./.berk/berk.db3")
+        .chain_err(|| "unable to open database")?;
 
-                if let Some(parent) = object_dest.parent() {
-                    create_dir_all(parent)?;
-                }
+    database.init()
+        .chain_err(|| "unable to create database tables")?;
 
-                let file = File::create(object_dest)?;
-                let mut e = Encoder::new(file)?;
+    let git_blob = GitBlob::from_file("hello.txt")
+        .chain_err(|| "unable to read file")?;
 
-                std::io::copy(&mut &object.with_header()[..], &mut e)?;
-                e.finish().into_result()?;
-            }
-            println!("{}", hex_hash)
-        }
-    }
+    database.commit_blob(git_blob)
+        .chain_err(|| "unable to commit git blob")?;
+
     Ok(())
 }
