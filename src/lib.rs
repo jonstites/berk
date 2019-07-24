@@ -1,6 +1,8 @@
+#![deny(unsafe_code)]
+
 use rusqlite::types::ToSql;
 use rusqlite::{Connection, Result, NO_PARAMS};
-use crypto::sha1::Sha1;
+use crypto::sha3::Sha3;
 use crypto::digest::Digest;
 use std::fs::File;
 use std::io::prelude::*;
@@ -14,12 +16,9 @@ pub struct GitBlob {
 impl GitBlob {
 
     pub fn new(data: Vec<u8>) -> GitBlob {
-
-        let mut hasher = Sha1::new();
-
-        let data_len = data.len().to_string();
-        let header = format!("blob {}\0", data_len);
-        hasher.input(header.as_bytes());
+        // Calculate the sha-256 of the bytes of data,
+        // then store the result as a String in hex format
+        let mut hasher = Sha3::sha3_256();
         hasher.input(&data);
 
         let oid = hasher.result_str();
