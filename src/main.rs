@@ -1,54 +1,63 @@
-extern crate berk;
+#![deny(unsafe_code)]
+
+extern crate structopt;
+use berk::{Database, GitBlob};
+use structopt::StructOpt;
 
 #[macro_use]
-extern crate clap;
-use clap::{App, Arg, SubCommand};
-use std::path::Path;
+extern crate error_chain;
+mod errors {
+    // Create the Error, ErrorKind, ResultExt, and Result types
+    error_chain!{}
+}
 
-use libflate::zlib::Encoder;
-use std::fs::{create_dir_all, File};
+use errors::*;
 
-fn main() -> berk::Result<()> {
-    let matches = App::new("berk")
-        .version(crate_version!())
-        .about("A git implementation for no good reason")
-        .subcommand(
-            SubCommand::with_name("hash-object")
-                .arg(Arg::with_name("file").index(1))
-                .arg(
-                    Arg::with_name("write")
-                        .short("w")
-                        .help("Actually write the object into the object database."),
-                ),
-        )
-        .get_matches();
+#[derive(StructOpt, Debug)]
+#[structopt(name = "berk")]
+/// the stupid content tracker
+enum Opt {
+    #[structopt(name = "init")]
+    /// initialize the berk repo
+    Init {},
+    #[structopt(name = "add")]
+    /// add files to the staging area
+    Add {
+        files: Vec<String>,
+    },
+}
 
-    if let Some(matches) = matches.subcommand_matches("hash-object") {
-        if let Some(filename) = matches.value_of("file") {
-            let object = berk::object_from_file(&filename)?;
-            let hash = berk::hash_object(&object);
-            let hex_hash: String = hash.iter().map(|&byte| format!("{:02x}", byte)).collect();
+fn main() -> Result<()> {
+    let matches = Opt::from_args();
 
-            if matches.is_present("write") {
-                let path = Path::new(".");
-                let git_src = berk::find_git_src(&path)?;
-                let object_dest = git_src
-                    .join(".git/objects")
-                    .join(hex_hash[..2].to_string())
-                    .join(hex_hash[2..].to_string());
-
-                if let Some(parent) = object_dest.parent() {
-                    create_dir_all(parent)?;
-                }
-
-                let file = File::create(object_dest)?;
-                let mut e = Encoder::new(file)?;
-
-                std::io::copy(&mut &object.with_header()[..], &mut e)?;
-                e.finish().into_result()?;
-            }
-            println!("{}", hex_hash)
-        }
+    match matches {
+        Opt::Init{} => init_repo("./.berk/berk.db3"),
+        Opt::Add{files} => add_files("./.berk/berk.db3", files),
     }
+}
+
+fn init_repo(db_path: &str) -> Result<()> {
+    let database = Database::new(db_path)
+        .chain_err(|| "unable to open database")?;
+    
+    database.init()
+        .chain_err(|| "unable to create database tables")?;
+
     Ok(())
+}
+
+fn add_files(db_path: &str, files: Vec<String>) -> Result<()> {
+    let database = Database::new(db_path)
+        .chain_err(|| "unable to open database")?;
+
+    for file in files.iter() {
+        let git_blob = GitBlob::from_file(file)
+            .chain_err(|| "unable to read file")?;
+
+        database.commit_blob(git_blob)
+            .chain_err(|| "unable to commit git blob")?;
+    }
+
+    Ok(())
+
 }
