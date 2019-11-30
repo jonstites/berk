@@ -1,63 +1,83 @@
 #![deny(unsafe_code)]
 
+extern crate berk;
+extern crate diesel;
+
+
 extern crate structopt;
-use berk::{Database, GitBlob};
 use structopt::StructOpt;
 
+use failure::ResultExt;
+use exitfailure::ExitFailure;
+
+use self::berk::*;
+use self::models::*;
+use self::diesel::prelude::*;
+
 #[macro_use]
-extern crate error_chain;
-mod errors {
-    // Create the Error, ErrorKind, ResultExt, and Result types
-    error_chain!{}
+extern crate diesel_migrations;
+use diesel_migrations::embed_migrations;
+
+use std::path::PathBuf;
+
+embed_migrations!();
+
+
+fn main() -> Result<(), ExitFailure> {
+    use berk::schema::blob_objects::dsl::*;
+
+    let opts = Opt::from_args();
+    match opts.subcmd {
+	SubCommand::Init{dir} => initialize_repo(dir)?,
+    }
+    Ok(())
 }
 
-use errors::*;
-
+/// This doc string acts as a help message when the user runs '--help'
+/// as do all doc strings on fields
 #[derive(StructOpt, Debug)]
-#[structopt(name = "berk")]
-/// the stupid content tracker
-enum Opt {
-    #[structopt(name = "init")]
-    /// initialize the berk repo
-    Init {},
-    #[structopt(name = "add")]
-    /// add files to the staging area
-    Add {
-        files: Vec<String>,
+#[structopt(version = "0.1")]
+struct Opt {
+    #[structopt(subcommand)]
+    subcmd: SubCommand,
+}
+
+/// This doc string acts as a help message when the user runs '--help'
+/// as do all doc strings on fields
+#[derive(StructOpt, Debug)]
+enum SubCommand {
+    /// This doc string acts as a help message when the user runs '--help'
+    /// as do all doc strings on fields   
+    Init {
+	#[structopt(parse(from_os_str))]
+	dir: PathBuf,
     },
-}
 
-fn main() -> Result<()> {
-    let matches = Opt::from_args();
-
-    match matches {
-        Opt::Init{} => init_repo("./.berk/berk.db3"),
-        Opt::Add{files} => add_files("./.berk/berk.db3", files),
+    /// Add...
+    Add {
+	#[structopt(parse(from_os_str))]
+	files: Vec<PathBuf>,
     }
 }
 
-fn init_repo(db_path: &str) -> Result<()> {
-    let database = Database::new(db_path)
-        .chain_err(|| "unable to open database")?;
+
+fn initialize_repo(repo_path: PathBuf) -> Result<(), ExitFailure> {
+
+    let connection = open_repo(repo_path)?;
     
-    database.init()
-        .chain_err(|| "unable to create database tables")?;
+    // This will run the necessary migrations.
+    embedded_migrations::run(&connection)
+	.with_context(|_| format!("could not initialize repo"))?;
 
     Ok(())
 }
 
-fn add_files(db_path: &str, files: Vec<String>) -> Result<()> {
-    let database = Database::new(db_path)
-        .chain_err(|| "unable to open database")?;
+fn open_repo(mut repo_path: PathBuf) -> Result<SqliteConnection, ExitFailure> {
+    repo_path.push(".berk.db");
+    let repo_url = repo_path.to_str()
+	.ok_or(failure::err_msg(format!("could not read repo as a String: {:?}", repo_path)))?;
+    
+    let connection = berk::establish_connection(repo_url)?;
 
-    for file in files.iter() {
-        let git_blob = GitBlob::from_file(file)
-            .chain_err(|| "unable to read file")?;
-
-        database.commit_blob(git_blob)
-            .chain_err(|| "unable to commit git blob")?;
-    }
-
-    Ok(())
-
+    Ok(connection)
 }
