@@ -14,70 +14,43 @@ use self::berk::*;
 use self::models::*;
 use self::diesel::prelude::*;
 
-#[macro_use]
-extern crate diesel_migrations;
-use diesel_migrations::embed_migrations;
-
-use std::path::PathBuf;
-
-embed_migrations!();
-
+use walkdir::WalkDir;
 
 fn main() -> Result<(), ExitFailure> {
-    use berk::schema::blob_objects::dsl::*;
-
-    let opts = Opt::from_args();
+    let opts = args::Opt::from_args();
+    
     match opts.subcmd {
-	SubCommand::Init{dir} => initialize_repo(dir)?,
+	args::SubCommand::Init{dir} => {	    
+	    let mut repo_path = dir;
+
+	    let mut repo_absolute = std::fs::canonicalize(repo_path.clone())
+		.with_context(|_| format!("Could not resolve path: {:?}", repo_path))?;
+			      
+	    repo_absolute.push(".berk.db");
+			      
+	    let repo = repo_absolute.to_str()
+		.ok_or(failure::err_msg(format!("Not valid UTF-8: {:?}", repo_path)))?;
+	    
+	    berk::repo::initialize(repo)?
+
+	},
+	args::SubCommand::Add{files} => {
+
+	    for file in &files {
+		for entry in WalkDir::new(file) {
+		    let entry = entry.unwrap();
+		    let entry_type = entry.file_type();
+
+		    if entry_type.is_file() {
+			println!("{}", entry.path().display());
+		    }
+		}
+	    }
+	},
+	args::SubCommand::Print{} => {
+
+	},
     }
     Ok(())
 }
 
-/// This doc string acts as a help message when the user runs '--help'
-/// as do all doc strings on fields
-#[derive(StructOpt, Debug)]
-#[structopt(version = "0.1")]
-struct Opt {
-    #[structopt(subcommand)]
-    subcmd: SubCommand,
-}
-
-/// This doc string acts as a help message when the user runs '--help'
-/// as do all doc strings on fields
-#[derive(StructOpt, Debug)]
-enum SubCommand {
-    /// This doc string acts as a help message when the user runs '--help'
-    /// as do all doc strings on fields   
-    Init {
-	#[structopt(parse(from_os_str))]
-	dir: PathBuf,
-    },
-
-    /// Add...
-    Add {
-	#[structopt(parse(from_os_str))]
-	files: Vec<PathBuf>,
-    }
-}
-
-
-fn initialize_repo(repo_path: PathBuf) -> Result<(), ExitFailure> {
-
-    let connection = open_repo(repo_path)?;
-    
-    // This will run the necessary migrations.
-    embedded_migrations::run(&connection)
-	.with_context(|_| format!("could not initialize repo"))?;
-
-    Ok(())
-}
-
-fn open_repo(mut repo_path: PathBuf) -> Result<SqliteConnection, ExitFailure> {
-    repo_path.push(".berk.db");
-    let repo_url = repo_path.to_str()
-	.ok_or(failure::err_msg(format!("could not read repo as a String: {:?}", repo_path)))?;
-    
-    let connection = berk::establish_connection(repo_url)?;
-
-    Ok(connection)
-}

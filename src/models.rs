@@ -1,4 +1,4 @@
-#[derive(Queryable)]
+#[derive(Queryable, Debug)]
 pub struct BlobObject {
     pub blob_oid: Vec<u8>,
     pub blob_data: Vec<u8>,
