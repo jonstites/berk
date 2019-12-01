@@ -21,3 +21,8 @@ rusqlite = "0.20.0"
 structopt = "0.3"
 walkdir = "2.2"
 sha3 = "0.8.2"
+
+[dev-dependencies]
+assert_cmd = "0.10"
+predicates = "1"
+tempfile = "3"
