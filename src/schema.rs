@@ -11,7 +11,4 @@ table! {
     }
 }
 
-allow_tables_to_appear_in_same_query!(
-    blob_objects,
-    tree_objects,
-);
+allow_tables_to_appear_in_same_query!(blob_objects, tree_objects,);
