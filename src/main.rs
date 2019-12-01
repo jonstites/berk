@@ -8,7 +8,8 @@ use exitfailure::ExitFailure;
 use failure::ResultExt;
 use self::berk::{args, repo};
 use std::path::PathBuf;
-
+use self::berk::models::*;
+use diesel::query_dsl::RunQueryDsl;
 fn main() -> Result<(), ExitFailure> {
     let opts = args::Opt::from_args();
 
@@ -34,18 +35,21 @@ fn add(files: Vec<PathBuf>) -> Result<(), ExitFailure> {
 }
 
 fn print() -> Result<(), ExitFailure> {
+    use berk::schema::blob::dsl::*;
+    use berk::schema::stage::dsl::*;    
+    
     let working_directory = std::env::current_dir()?;    
     let repo = repo::Repo::load(working_directory)?;
 
-    let blobs = repo.read_blobs()?;
+    let blobs = blob.load::<Blob>(&repo.database)?;
 
-    for blob in &blobs {
-        println!("{:?}", blob.blob_oid);
+    for blob_o in &blobs {
+        println!("{:?}", blob_o.blob_oid);
     }
 
-    let blobs = repo.read_stage()?;
-    for blob in &blobs {
-	println!("{:?}", blob);
+    let blobs = stage.load::<StageBlob>(&repo.database)?;
+    for blob_o in &blobs {
+	println!("{:?}", blob_o);
     }
     Ok(())
 }

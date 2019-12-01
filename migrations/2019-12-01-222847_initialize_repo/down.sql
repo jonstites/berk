@@ -1,0 +1,4 @@
+DROP TABLE blob;
+DROP TABLE tree;
+DROP TABLE stage;
+
