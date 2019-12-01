@@ -17,7 +17,7 @@ travis-ci = { repository = "jonstites/berk", branch = "master" }
 [dependencies]
 failure = "0.1.6"
 exitfailure = "0.5.1"
-diesel = { version = "1.4.3", features = ["sqlite"] }
-diesel_migrations = "1.4.0"
+rusqlite = "0.20.0"
 structopt = "0.3"
 walkdir = "2.2"
+sha3 = "0.8.2"

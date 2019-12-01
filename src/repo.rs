@@ -1,23 +1,73 @@
-use diesel_migrations::embed_migrations;
-use exitfailure::ExitFailure;
+use super::database::{Blob, Database};
+use super::workspace::{AbsolutePath, Workspace};
+
+use std::collections::HashSet;
 use failure::ResultExt;
+use exitfailure::ExitFailure;
+use std::path::{Path, PathBuf};
 
-use diesel::prelude::*;
-use diesel::sqlite::SqliteConnection;
 
-embed_migrations!();
+pub const database_name: &str = ".berk.db";
 
-// This will create the repo and its tables.
-pub fn initialize(repo: &str) -> Result<(), ExitFailure> {
-    let connection = establish_connection(repo)?;
-    embedded_migrations::run(&connection)
-        .with_context(|_| format!("could not initialize repo: {}", repo))?;
-    Ok(())
+pub struct Repo {
+    database_directory: PathBuf,
+    workspace: Workspace,
+    database: Database,    
 }
 
-pub fn establish_connection(url: &str) -> Result<SqliteConnection, ExitFailure> {
-    let connection = SqliteConnection::establish(url)
-        .with_context(|_| format!("error connecting to database: {}", url))?;
-    Ok(connection)
-}
+impl Repo {
 
+    pub fn load(working_directory: PathBuf) -> Result<Repo, ExitFailure> {
+	let database_directory = Repo::find_database_directory(&working_directory)?;
+	let workspace = Workspace::new(working_directory)?;
+
+	let database_url = Repo::make_database_url(&database_directory)?;
+	let database = Database::new(&database_url)?;
+	
+	Ok(Repo {database_directory, workspace, database})
+    }
+
+    pub fn initialize_database(database_directory: PathBuf) -> Result<(), ExitFailure> {
+	let database_url = Repo::make_database_url(&database_directory)?;
+	let database = Database::new(&database_url)?;
+	database.initialize()?;
+	Ok(())
+    }
+
+    pub fn add_files(&mut self, files: Vec<PathBuf>) -> Result<(), ExitFailure> {
+	let files: HashSet<AbsolutePath> = self.workspace.walk(files)?;
+
+	let mut transaction = self.database.transaction()?;
+	for file in &files {
+	    
+	    let blob_data = self.workspace.read_file(file)?;
+	    let blob = Blob::new(blob_data);
+	    transaction = self.database.add_blob(&blob, transaction)?;
+	    
+	    let path = self.workspace.sanitize_path(file, Path::new(&self.database_directory))?;
+	    transaction = self.database.stage(path, blob.blob_oid.to_vec(), transaction)?;
+	}
+	self.database.commit(transaction)?;
+	Ok(())
+    }
+
+    pub fn find_database_directory(mut directory: &Path) -> Result<PathBuf, ExitFailure> {
+	loop {
+	    let database = Repo::make_database_url(&directory)?;
+	    if Path::new(&database).is_file() {
+		return Ok(directory.to_path_buf());
+	    } else {
+		let parent = directory.parent()
+		    .ok_or(failure::err_msg("not a berk repo"))?;
+		directory = parent;
+	    }
+	}
+    }
+
+    pub fn make_database_url(directory: &Path) -> Result<String, ExitFailure> {
+	let url = directory.join(database_name);
+	let database_url = url.to_str()
+	    .ok_or(failure::err_msg(format!("could not convert to UTF-8 string: {:?}", url)))?;
+	Ok(database_url.to_string())
+    }
+}
