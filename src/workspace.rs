@@ -45,9 +45,10 @@ impl Workspace {
 	Ok(contents)
     }
 
-    pub fn sanitize_path<P: AsRef<Path>>(&self, file: &AbsolutePath, relative_dir: P) -> Result<SanitizedPath, ExitFailure> {
+    pub fn sanitize_path<P: AsRef<Path> + std::fmt::Debug + Copy>(&self, file: &AbsolutePath, relative_dir: P) -> Result<SanitizedPath, ExitFailure> {
 	let path = Path::new(&file.0);
-	let path = path.strip_prefix(relative_dir)?;
+	let path = path.strip_prefix(relative_dir)
+	    .with_context(|_| format!("outside of berk repo: {:?}", relative_dir))?;
 	let path = path.to_str()
 	    .ok_or(failure::err_msg(format!("could not read as UTF-8: {:?}", path)))?;
 	Ok(SanitizedPath(path.to_string()))

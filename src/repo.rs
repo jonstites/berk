@@ -47,13 +47,22 @@ impl Repo {
 		
 		let blob_data = self.workspace.read_file(file)?;
 		let blob = NewBlob::new(blob_data);
-		diesel::insert_into(blob::table)
+		diesel::replace_into(blob::table)
 		    .values(&blob)
 		    .execute(&self.database)?;
 
+		// one failure mode
 		let path = self.workspace.sanitize_path(file, Path::new(&self.database_directory))?;
+		let mut remove_prefix = path.0.clone();
+		remove_prefix.push(std::path::MAIN_SEPARATOR);
+		remove_prefix.push('%');
+		diesel::delete(stage::table.filter(super::schema::stage::dsl::path.like(remove_prefix)))
+		    .execute(&self.database)?;
+
+		// need second failure mode too
+		
 		let staged_blob = NewStageBlob::new(path, blob.blob_oid.to_vec());
-		diesel::insert_into(stage::table)
+		diesel::replace_into(stage::table)
 		    .values(&staged_blob)
 		    .execute(&self.database)?;
 	    }
