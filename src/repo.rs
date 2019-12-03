@@ -51,8 +51,10 @@ impl Repo {
 		    .values(&blob)
 		    .execute(&self.database)?;
 
-		// one failure mode
+
 		let path = self.workspace.sanitize_path(file, Path::new(&self.database_directory))?;
+
+		// one failure mode		
 		let mut remove_prefix = path.0.clone();
 		remove_prefix.push(std::path::MAIN_SEPARATOR);
 		remove_prefix.push('%');
@@ -60,7 +62,17 @@ impl Repo {
 		    .execute(&self.database)?;
 
 		// need second failure mode too
-		
+		let mut path2 = Path::new(&path.0);
+		while let Some(parent) = path2.parent() {
+		    let parent_str = parent.to_str()
+			.ok_or(failure::err_msg(format!("could not convert to UTF-8: {:?}", parent)))?;
+
+		    diesel::delete(stage::table.filter(super::schema::stage::dsl::path.eq(parent_str)))
+			.execute(&self.database)?;
+		    path2 = parent;
+		}
+
+		// And insert into index
 		let staged_blob = NewStageBlob::new(path, blob.blob_oid.to_vec());
 		diesel::replace_into(stage::table)
 		    .values(&staged_blob)
